@@ -1,3 +1,6 @@
+# Исключить конфиденциальные файлы
+authorized_key.json
+
 # Local .terraform directories
 .terraform/
 
@@ -35,3 +38,51 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+### Ansible ###
+# Файлы с паролями и секретами
+*.vault.yml
+*.vault
+.vault_pass.txt
+.vault_pass
+.secrets/
+.env
+*.key
+*.pem
+*.pub
+*.cer
+*.csr
+*.crt
+*.pfx
+
+# Временные файлы выполнения playbook
+*.retry
+
+# Конфигурационные файлы (может быть локальным)
+ansible.cfg
+ansible-local.cfg
+
+# Кэш и инвентари
+*.pyc
+__pycache__/
+.cache/
+*.cache
+
+# Galaxy и роли
+roles/.galaxy_install_info
+galaxy-requirements.yml
+requirements.yml.lock
+
+# Игнорируем каталоги с динамическим инвентарём
+inventory/*.yml
+!inventory/example.yml  # если нужно исключить пример
+
+# Файлы IDE и редакторов
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Логи и временные файлы
+*.log
+*.tmp
