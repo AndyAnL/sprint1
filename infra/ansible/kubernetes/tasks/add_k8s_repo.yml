@@ -1,0 +1,45 @@
+---
+- name: Install prerequisites
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: yes
+  tags: k8s_repo
+
+- name: Create keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: 0755
+  tags: k8s_repo
+
+- name: Download and install Kubernetes GPG key (correct method)
+  ansible.builtin.shell: |
+    curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+    chmod 644 /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+  args:
+    creates: /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+  tags: k8s_repo
+
+- name: Add Kubernetes repository
+  ansible.builtin.shell: |
+    echo "deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
+    apt update
+  args:
+    creates: /etc/apt/sources.list.d/kubernetes.list
+  tags: k8s_repo
+
+- name: Verify repository
+  ansible.builtin.command: apt-cache policy kubelet
+  register: k8s_repo_check
+  changed_when: false
+  tags: k8s_repo
+
+- name: Debug repository info
+  ansible.builtin.debug:
+    var: k8s_repo_check.stdout_lines
+  tags: k8s_repo

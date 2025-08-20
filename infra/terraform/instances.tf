@@ -1,5 +1,6 @@
 resource "yandex_compute_instance" "k8s-master" {
   name        = "k8s-master"
+  hostname = "k8s-master"
   platform_id = "standard-v3"
   zone        = var.zone_id
   service_account_id = data.yandex_iam_service_account.existing_sa.id
@@ -7,7 +8,7 @@ resource "yandex_compute_instance" "k8s-master" {
 
   resources {
     cores         = 2
-    memory        = 2  # Уменьшено до 2 GB
+    memory        = 4  # Увеличил с 2 GB
     core_fraction = 50 # Гарантированная доля vCPU
   }
 
@@ -25,7 +26,7 @@ resource "yandex_compute_instance" "k8s-master" {
 
   network_interface {
     subnet_id = yandex_vpc_subnet.k8s-subnet.id
-    nat       = false
+    nat       = true
     ip_address = "192.168.10.10"
   }
 
@@ -36,6 +37,7 @@ resource "yandex_compute_instance" "k8s-master" {
 
 resource "yandex_compute_instance" "k8s-app" {
   name        = "k8s-app"
+  hostname = "k8s-app"
   platform_id = "standard-v3"
   zone        = var.zone_id
 
@@ -59,7 +61,7 @@ resource "yandex_compute_instance" "k8s-app" {
 
   network_interface {
     subnet_id = yandex_vpc_subnet.k8s-subnet.id
-    nat       = false
+    nat       = true
     ip_address = "192.168.10.11"
   }
 
@@ -70,12 +72,13 @@ resource "yandex_compute_instance" "k8s-app" {
 
 resource "yandex_compute_instance" "srv" {
   name        = "srv"
+  hostname = "srv"
   platform_id = "standard-v3"
   zone        = var.zone_id
 
   resources {
     cores         = 2
-    memory        = 2  # Уменьшено до 2 GB
+    memory        = 4  # Увеличил с 2 GB
     core_fraction = 50
   }
 

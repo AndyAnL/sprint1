@@ -1,0 +1,109 @@
+---
+- name: Set up Kubernetes cluster
+  hosts: k8s_master:k8s_workers
+  become: yes
+  
+  # Явное объявление handlers (лучше чем include)
+  handlers:
+    - name: update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+    - name: restart docker
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+        enabled: yes
+    - name: restart containerd
+      ansible.builtin.systemd:
+        name: containerd
+        state: restarted
+        enabled: yes
+     
+  tasks:
+    - name: Verify hosts
+      include_tasks: all/tasks/check_hosts.yml
+
+#  Добавление docker репозитория
+    - name: add docker repo
+      include_tasks: all/tasks/add_docker_repo.yml
+
+# Настройка сети
+    - name: configure network
+      include_tasks: kubernetes/tasks/configure_network.yml
+
+# Добавление репозитория Kubernetes
+    - name: add kubernetes repo
+      include_tasks: kubernetes/tasks/add_k8s_repo.yml
+
+# Установка containered
+    - name: Install containerd
+      include_tasks: kubernetes/tasks/setup_containerd.yml
+      tags: containerd_install
+
+# Настройка containered
+    - name: Configure containerd
+      include_tasks: kubernetes/tasks/configure_containerd.yml
+      tags: containerd_config          
+
+# Установка компонентов Kubernetes
+    - name: install kubernetes packages
+      include_tasks: kubernetes/tasks/install_k8s_packages.yml
+
+# Cоздание конфига кластера
+    - name: Create kubeadm config
+      include_tasks: kubernetes/tasks/create_kubeadm_config.yml
+      when: inventory_hostname in groups['k8s_master']
+      tags: k8s_init
+
+# Инициализация кластера (только на master)
+    - name: initialize kubernetes cluster
+      include_tasks: kubernetes/tasks/init_cluster.yml
+      when: inventory_hostname in groups['k8s_master']
+      tags: 
+        - k8s_init
+        - master_only
+
+# Установка Flanel (kubectl и jq только на master)
+    - name: Prepare for Flannel installation
+      include_tasks: kubernetes/tasks/install_flannel_prereqs.yml
+      when: inventory_hostname in groups['k8s_master']
+      tags: 
+        - flannel
+        - flannel_prereqs
+
+# Загрузка манифеста Flannel
+    - name: "[Flannel] Download Flannel CNI manifest"
+      include_tasks: kubernetes/tasks/download_flannel_manifest.yml
+      when: inventory_hostname in groups['k8s_master']
+      tags: 
+        - flannel
+        - flannel_download
+
+# Проверка и настройка манифеста
+    - name: "[Flannel] Configure Flannel manifest"
+      include_tasks: kubernetes/tasks/configure_flannel.yml
+      when: inventory_hostname in groups['k8s_master']
+      tags:
+        - flannel
+        - flannel_configure
+
+# Применение Flannel + проверка Pods
+    - name: "[Flannel] Apply Flannel CNI"
+      include_tasks: kubernetes/tasks/apply_flannel.yml
+      when: inventory_hostname in groups['k8s_master']
+      tags:
+        - flannel
+        - flannel_apply
+
+# Получение команды присоединения к кластеру   kubeadm join
+    - name: Get worker join command
+      include_tasks: kubernetes/tasks/get_join_command.yml
+      when: inventory_hostname in groups['k8s_master']
+      tags: join
+
+# Присоединение  k8s-app к кластеру
+    - name: Join worker nodes
+      include_tasks: kubernetes/tasks/join_worker.yml
+      when: inventory_hostname in groups['k8s_workers']
+      tags: join

@@ -1,0 +1,41 @@
+---
+- name: Install Kubernetes components (v1.33)
+  ansible.builtin.apt:
+    name:
+      - kubelet=1.33.4-1.1
+      - kubeadm=1.33.4-1.1
+      - kubectl=1.33.4-1.1
+    state: present
+    update_cache: yes
+  tags: k8s_install
+
+- name: Hold packages to prevent auto-upgrades
+  ansible.builtin.command: apt-mark hold kubelet kubeadm kubectl
+  tags: k8s_install
+
+- name: Verify kubelet installation
+  ansible.builtin.command: kubelet --version
+  register: kubelet_check
+  changed_when: false
+  tags: k8s_install
+
+- name: Verify kubeadm installation
+  ansible.builtin.command: kubeadm version -o short
+  register: kubeadm_check
+  changed_when: false
+  tags: k8s_install
+
+- name: Verify kubectl installation
+  ansible.builtin.command: kubectl version --client
+  register: kubectl_check
+  changed_when: false
+  tags: k8s_install
+
+- name: Display installation results
+  ansible.builtin.debug:
+    msg: |
+      Kubernetes components installed successfully!
+      kubelet: {{ kubelet_check.stdout }}
+      kubeadm: {{ kubeadm_check.stdout }}
+      kubectl: {{ kubectl_check.stdout_lines[0] }}
+  tags: k8s_install

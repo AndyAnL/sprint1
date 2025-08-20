@@ -1,0 +1,78 @@
+---
+- name: "[Flannel] Validate prerequisites"
+  block:
+    - name: Check Flannel manifest exists
+      ansible.builtin.stat:
+        path: /etc/kube-flannel/kube-flannel.yml
+      register: flannel_manifest
+
+    - name: Verify Kubernetes API is available
+      ansible.builtin.command: kubectl cluster-info
+      register: api_check
+      changed_when: false
+      failed_when: api_check.rc != 0
+  tags: flannel
+
+- name: "[Flannel] Prepare network directory"
+  ansible.builtin.file:
+    path: /run/flannel
+    state: directory
+    mode: 0755
+  when: flannel_manifest.stat.exists
+  tags: flannel
+
+- name: "[Flannel] Create subnet.env"
+  ansible.builtin.copy:
+    dest: /run/flannel/subnet.env
+    content: |
+      FLANNEL_NETWORK=10.244.0.0/16
+      FLANNEL_SUBNET=10.244.0.1/24
+      FLANNEL_MTU=1450
+      FLANNEL_IPMASQ=true
+    mode: 0644
+  when: flannel_manifest.stat.exists
+  tags: flannel
+
+- name: "[Flannel] Apply Flannel CNI"
+  ansible.builtin.command: >
+    kubectl apply -f /etc/kube-flannel/kube-flannel.yml
+  register: flannel_apply
+  changed_when: "'created' in flannel_apply.stdout or 'configured' in flannel_apply.stdout"
+  when: flannel_manifest.stat.exists
+  tags: flannel
+
+- name: "[Flannel] Verify DaemonSet creation"
+  ansible.builtin.command: >
+    kubectl get daemonset -n kube-flannel kube-flannel-ds -o jsonpath='{.status.numberReady}'
+  register: daemonset_status
+  until: daemonset_status.stdout == "1"
+  retries: 12
+  delay: 10
+  when: flannel_manifest.stat.exists
+  tags: flannel
+
+- name: "[Flannel] Final validation"
+  block:
+    - name: Check Flannel pods
+      ansible.builtin.command: >
+        kubectl get pods -n kube-flannel -l app=flannel -o wide
+      register: flannel_pods
+      changed_when: false
+
+    - name: Verify network interfaces
+      ansible.builtin.shell: |
+        ip -o addr show flannel.1 || ip -o addr show cni0
+      args:
+        executable: /bin/bash
+      register: network_interfaces
+      changed_when: false
+      failed_when: false
+
+    - name: Display installation report
+      ansible.builtin.debug:
+        msg: |
+          Flannel status:
+          - Pods: {{ flannel_pods.stdout_lines | default([]) | join('\n          ') }}
+          - Interfaces: {{ network_interfaces.stdout_lines | default([]) | join('\n          ') }}
+  when: flannel_manifest.stat.exists
+  tags: flannel

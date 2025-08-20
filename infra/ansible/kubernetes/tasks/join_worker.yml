@@ -1,0 +1,41 @@
+---
+- name: Check if node already joined
+  ansible.builtin.command: kubectl get node {{ inventory_hostname }} -o name
+  register: node_check
+  ignore_errors: true
+  changed_when: false
+  delegate_to: "{{ groups['k8s_master'][0] }}"
+  tags: join
+
+- name: Reset node if already joined
+  ansible.builtin.command: kubeadm reset -f
+  when: node_check.rc == 0
+  ignore_errors: true
+  tags: join
+
+- name: Execute join command (if needed)
+  ansible.builtin.command: >
+    {{ hostvars[groups['k8s_master'][0]]['cluster_join_command'] }}
+    --ignore-preflight-errors=all
+  when: node_check.rc != 0
+  register: join_result
+  tags: join
+
+- name: Verify final status
+  ansible.builtin.command: >
+    kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+  register: final_status
+  changed_when: false
+  delegate_to: "{{ groups['k8s_master'][0] }}"
+  tags: join
+
+- name: Print join result
+  ansible.builtin.debug:
+    msg: >
+      Node {{ inventory_hostname }}: 
+      {% if final_status.stdout == 'True' %}
+      SUCCESS (Ready)
+      {% else %}
+      FAILED (Not Ready)
+      {% endif %}
+  tags: join

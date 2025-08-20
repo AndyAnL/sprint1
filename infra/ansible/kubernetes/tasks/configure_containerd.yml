@@ -1,0 +1,122 @@
+---
+- name: Ensure containerd config directory exists
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    mode: 0755
+  tags: containerd_config
+
+- name: Generate default containerd config
+  ansible.builtin.shell: |
+    containerd config default > /etc/containerd/config.toml
+    sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+    sed -i '/disabled_plugins = \["cri"\]/d' /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+  notify: restart containerd
+  tags: containerd_config
+
+- name: Verify containerd CRI plugin
+  ansible.builtin.shell: |
+    # Проверяем что конфиг существует и содержит CRI
+    if [ -f /etc/containerd/config.toml ]; then
+      if grep -q '\[plugins."io.containerd.grpc.v1.cri"\]' /etc/containerd/config.toml; then
+        echo "CRI_PLUGIN_ENABLED"
+      else
+        # Если нет CRI, перегенерируем конфиг
+        containerd config default > /etc/containerd/config.toml
+        sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+        sed -i '/disabled_plugins = \["cri"\]/d' /etc/containerd/config.toml
+        echo "CRI_PLUGIN_REGENERATED"
+      fi
+    else
+      echo "CONFIG_MISSING"
+    fi
+  register: cri_plugin_check
+  changed_when: "'REGENERATED' in cri_plugin_check.stdout"
+  tags: containerd_config
+
+- name: Restart containerd if config was regenerated
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+  when: "'REGENERATED' in cri_plugin_check.stdout"
+  tags: containerd_config
+
+- name: Create crictl config
+  ansible.builtin.copy:
+    dest: /etc/crictl.yaml
+    content: |
+      runtime-endpoint: unix:///var/run/containerd/containerd.sock
+      image-endpoint: unix:///var/run/containerd/containerd.sock
+      timeout: 10
+      debug: false
+  tags: containerd_config
+
+# ===== ОСНОВНЫЕ ПРОВЕРКИ =====
+- name: Verify containerd service
+  ansible.builtin.systemd:
+    name: containerd
+    state: started
+    enabled: yes
+  register: svc_containerd
+  tags: containerd_config
+
+- name: Check CRI socket exists
+  ansible.builtin.stat:
+    path: /var/run/containerd/containerd.sock
+  register: cri_socket
+  tags: containerd_config
+
+- name: Basic CRI functionality test
+  ansible.builtin.shell: |
+    crictl info
+  register: cri_check
+  changed_when: false
+  failed_when: cri_check.rc != 0
+  tags: containerd_config
+
+# ===== ДОПОЛНИТЕЛЬНЫЕ ПРОВЕРКИ =====
+- name: Advanced container test (optional)
+  ansible.builtin.shell: |
+    crictl pull busybox && \
+    crictl runp <<EOF
+    {
+      "metadata": {"name": "test-pod"},
+      "linux": {}
+    }
+    EOF
+  args:
+    executable: /bin/bash
+  register: container_test
+  changed_when: false
+  failed_when: false  # Не фатальная ошибка
+  when: cri_check.rc == 0
+  tags: containerd_config
+
+- name: Cleanup test resources
+  ansible.builtin.shell: |
+    crictl rmp -f $(crictl pods -q) 2>/dev/null || true
+    crictl rmi busybox 2>/dev/null || true
+  when: container_test is defined and container_test.rc == 0
+  changed_when: false
+  tags: containerd_config
+
+- name: Display containerd status
+  ansible.builtin.debug:
+    msg: |
+      Containerd Status Report:
+      - Config State: {{ cri_plugin_check.stdout }}
+      - Service: {{ 'ACTIVE' if svc_containerd is success else 'FAILED' }}
+      - CRI Socket: {{ 'EXISTS' if cri_socket.stat.exists else 'MISSING' }}
+      - CRI Connection: {{ 'OK' if cri_check.rc == 0 else 'FAILED' }}
+      - Test Container: {{ 'SUCCESS' if container_test is defined and container_test.rc == 0 else 'SKIPPED/FAILED' }}
+  tags: containerd_config
+
+# ===== ФИНАЛЬНЫЙ РЕСТАРТ ДЛЯ ПРИМЕНЕНИЯ =====
+- name: Final containerd restart
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+  when: cri_check.rc != 0  # Перезапуск если были проблемы
+  tags: containerd_config

@@ -1,0 +1,31 @@
+---
+- name: Enable kernel modules
+  ansible.builtin.shell: |
+    modprobe br_netfilter
+    modprobe overlay
+  tags: network
+
+- name: Configure sysctl parameters
+  ansible.builtin.copy:
+    content: |
+      net.bridge.bridge-nf-call-iptables = 1
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+    dest: /etc/sysctl.d/99-kubernetes.conf
+    mode: 0644
+  tags: network
+
+- name: Apply sysctl parameters
+  ansible.builtin.command: sysctl --system
+  tags: network
+
+- name: Verify network settings
+  ansible.builtin.command: sysctl net.bridge.bridge-nf-call-iptables net.ipv4.ip_forward
+  register: net_settings
+  changed_when: false
+  tags: network
+
+- name: Display network settings
+  ansible.builtin.debug:
+    var: net_settings.stdout_lines
+  tags: network

@@ -1,0 +1,17 @@
+---
+- name: update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: restart docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+    enabled: yes
+
+- name: restart containerd
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+    enabled: yes

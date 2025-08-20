@@ -1,0 +1,68 @@
+---
+- name: "[Flannel] Install kubectl for cluster management"
+  ansible.builtin.apt:
+    name: kubectl
+    state: present
+    update_cache: yes
+  register: kubectl_install
+  tags: 
+    - flannel
+    - flannel_prereqs
+
+- name: "[Flannel] Verify kubectl can access cluster"
+  ansible.builtin.command: kubectl version --client
+  register: kubectl_check
+  changed_when: false
+  failed_when: 
+    - kubectl_check.rc != 0
+    - "'GitVersion' not in kubectl_check.stdout"
+  tags: 
+    - flannel
+    - flannel_prereqs
+
+- name: "[Flannel] Install jq for JSON parsing"
+  ansible.builtin.apt:
+    name: jq
+    state: present
+  register: jq_install
+  tags: 
+    - flannel
+    - flannel_prereqs
+
+- name: "[Flannel] Verify jq installation"
+  ansible.builtin.command: jq --version
+  register: jq_check
+  changed_when: false
+  failed_when: jq_check.rc != 0
+  tags: 
+    - flannel
+    - flannel_prereqs
+
+- name: "[Flannel] Check kubeconfig availability"
+  ansible.builtin.stat:
+    path: "{{ ansible_env.HOME }}/.kube/config"
+  register: kubeconfig
+  tags: 
+    - flannel
+    - flannel_prereqs
+
+- name: "[Flannel] Validate cluster access"
+  ansible.builtin.command: kubectl cluster-info
+  register: cluster_check
+  changed_when: false
+  failed_when: cluster_check.rc != 0
+  when: kubeconfig.stat.exists
+  tags: 
+    - flannel
+    - flannel_prereqs
+
+- name: "[Flannel] Report prerequisites status"
+  ansible.builtin.debug:
+    msg: |
+      Flannel prerequisites status:
+      - kubectl: {{ 'OK' if kubectl_check.rc == 0 else 'FAILED' }}
+      - jq: {{ jq_check.stdout | default('NOT INSTALLED') }}
+      - Cluster access: {{ 'CONFIGURED' if kubeconfig.stat.exists else 'MISSING CONFIG' }}
+  tags: 
+    - flannel
+    - flannel_prereqs

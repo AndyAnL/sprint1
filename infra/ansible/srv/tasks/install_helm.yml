@@ -1,0 +1,33 @@
+---
+- name: Download Helm install script
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3"
+    dest: "/tmp/get_helm.sh"
+    mode: "0755"
+  tags: helm
+
+- name: Execute Helm install script
+  ansible.builtin.command:
+    cmd: /tmp/get_helm.sh
+  args:
+    creates: /usr/local/bin/helm  # Запускаем только если Helm еще не установлен
+  tags: helm
+
+- name: Clean up temporary script
+  ansible.builtin.file:
+    path: /tmp/get_helm.sh
+    state: absent
+  tags: helm
+
+- name: Verify Helm installation
+  ansible.builtin.command:
+    cmd: helm version --short
+  register: helm_version_check
+  changed_when: false
+  failed_when: helm_version_check.rc != 0
+  tags: helm
+
+- name: Display Helm version
+  ansible.builtin.debug:
+    msg: "Helm installed successfully: {{ helm_version_check.stdout }}"
+  tags: helm

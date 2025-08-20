@@ -1,0 +1,29 @@
+---
+- name: Install essential packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop:
+    # Базовые инструменты (уже были)
+    - git          #  Для работы с репозиториями
+    - curl         #  Для HTTP-запросов (например, регистрация Runner)
+    - wget         #  Для загрузки файлов
+    - mc           #  Файловый менеджер
+    - jq           #  Для обработки JSON (полезно в CI/CD)
+    - unzip        #  Для распаковки архивов
+
+    # Новые добавления (рекомендуемые)
+    - tree         #  Визуализация структуры файлов (удобно для debug)
+    #- psmisc       #  Содержит killall/pstree (управление процессами)
+    - htop         #  Мониторинг ресурсов сервера
+    #- gnupg2       #  Для работы с GPG (например, добавление репозиториев)
+    #- software-properties-common  #  Для apt-add-repository
+    #- python3-pip  #  Для Python-зависимостей (если будут тесты на Django)
+    #- postgresql-client  #  Для проверки БД (если нужно в CI)
+
+    # Дополнительно (по желанию)
+    - net-tools    # ifconfig, netstat
+    - telnet       # Для тестирования сетевых соединений
+    - dnsutils     # dig, nslookup (debug DNS)
+  tags: base

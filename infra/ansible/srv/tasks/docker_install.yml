@@ -1,0 +1,85 @@
+---
+- name: Install Docker components
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+    state: present
+    update_cache: no
+  tags: docker
+  notify: restart docker
+
+- name: Ensure Docker service is running
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+  tags: docker
+
+- name: Verify Docker installation
+  block:
+    - name: Check Docker version
+      command: docker --version
+      register: docker_version
+      changed_when: false
+      
+    - name: Check containerd version
+      command: containerd --version
+      register: containerd_version
+      changed_when: false
+      
+    - name: Test Docker functionality
+      command: docker run --rm hello-world
+      register: docker_test
+      changed_when: false
+      ignore_errors: true
+      
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          Versions:
+            Docker: {{ docker_version.stdout }}
+            Containerd: {{ containerd_version.stdout }}
+          Test: {{ 'SUCCESS' if docker_test.rc == 0 else 'FAILED' }}
+  tags: docker
+
+# ---
+# ---
+
+- name: Get current user groups
+  ansible.builtin.shell: |
+    id -nG {{ ansible_user }}
+  register: current_groups
+  changed_when: false
+  tags: docker
+
+- name: Add user to docker group
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: "{{ (current_groups.stdout.split() + ['docker']) | unique }}"
+    append: yes
+  tags: docker
+
+- name: Verify docker group access
+  ansible.builtin.shell: |
+    groups {{ ansible_user }} | grep -w docker
+  register: group_check
+  changed_when: false
+  tags: docker
+
+- name: Apply group changes for current session
+  ansible.builtin.shell: |
+    sg docker -c "echo Successfully accessed docker group"
+  when: group_check.rc != 0
+  register: session_update
+  changed_when: false
+  tags: docker
+
+- name: Show group status
+  ansible.builtin.debug:
+    msg: |
+      Docker group status: {{ "ACTIVE" if group_check.rc == 0 else "PENDING RELOGIN" }}
+      To apply changes immediately, run: newgrp docker
+  tags: docker

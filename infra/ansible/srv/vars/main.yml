@@ -1,0 +1,9 @@
+# GitLab Runner Configuration
+gitlab_runner_url: "https://gitlab.com"
+gitlab_runner_registration_token: "glrt-IAJi-G1ee35dyGFfLT3nU286MQpwOjE3bnZ5OAp0OjMKdTpmdGRxcRg.01.1j1mwrakd"
+gitlab_runner_description: "Docker Runner on srv"
+gitlab_runner_tags: "docker,k8s"
+gitlab_runner_default_image: "docker:24.0"
+
+# Другие переменные для srv
+docker_users: ["ubuntu"]

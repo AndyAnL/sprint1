@@ -1,0 +1,20 @@
+---
+- name: Verify SSH connectivity
+  ansible.builtin.ping:
+  tags: always
+
+- name: Check basic system info
+  ansible.builtin.command:
+    cmd: |
+      echo "Hostname: $(hostname)"
+      echo "Kernel: $(uname -r)"
+      echo "Memory: $(free -h | awk '/^Mem:/{print $2}')"
+      echo "Disk: $(df -h / | awk 'NR==2{print $4}')"
+  changed_when: false
+  register: sys_info
+  tags: system_info
+
+- name: Display system information
+  ansible.builtin.debug:
+    var: sys_info.stdout_lines
+  tags: system_info

@@ -1,0 +1,57 @@
+---
+- name: Verify this is master node  # <-- Новая проверка
+  ansible.builtin.fail:
+    msg: "This task should only run on master node!"
+  when: inventory_hostname not in groups['k8s_master']
+  tags: k8s_init
+
+- name: Check if cluster already initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeconfig
+  tags: k8s_init
+
+- name: Initialize cluster with kubeadm (if not initialized)
+  ansible.builtin.command: >
+    kubeadm init --config=/etc/kubeadm/config.yaml
+    --ignore-preflight-errors=all
+    --upload-certs
+  args:
+    creates: /etc/kubernetes/admin.conf
+  register: kubeadm_init
+  when: not kubeconfig.stat.exists
+  ignore_errors: true
+  tags: k8s_init
+
+- name: Get join command (if initialized)
+  ansible.builtin.shell: |
+    kubeadm token create --print-join-command
+  register: join_command
+  when: kubeconfig.stat.exists
+  changed_when: false
+  tags: k8s_init
+
+- name: Display join command
+  ansible.builtin.debug:
+    msg: "Worker nodes can join using: {{ join_command.stdout }}"
+  when: join_command.stdout is defined
+  tags: k8s_init
+
+- name: Configure kubectl access
+  block:
+    - name: Create .kube directory
+      ansible.builtin.file:
+        path: "{{ ansible_env.HOME }}/.kube"
+        state: directory
+        mode: 0755
+    
+    - name: Copy admin config
+      ansible.builtin.copy:
+        src: /etc/kubernetes/admin.conf
+        dest: "{{ ansible_env.HOME }}/.kube/config"
+        remote_src: yes
+        owner: "{{ ansible_user_id }}"
+        group: "{{ ansible_user_gid }}"
+        mode: 0600
+  when: inventory_hostname in groups['k8s_master']
+  tags: k8s_init

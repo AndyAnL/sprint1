@@ -1,0 +1,77 @@
+---
+- name: Set up CI/CD server (srv)
+  hosts: srv
+  become: yes
+  vars_files:
+    - "{{ playbook_dir }}/srv/vars/main.yml"
+
+  handlers:
+    - name: update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+    - name: restart docker
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+        enabled: yes
+    - name: restart gitlab-runner
+      ansible.builtin.systemd:
+        name: gitlab-runner
+        state: restarted
+        enabled: yes
+
+  tasks:
+# Базовые проверки
+    - name: Verify hosts connectivity
+      include_tasks: all/tasks/check_hosts.yml
+      tags: always
+
+# Установка базовых пакетов
+    - name: Install base system packages
+      include_tasks: srv/tasks/install_base.yml
+      tags: base
+
+# Docker
+    - name: Add Docker repository
+      include_tasks: all/tasks/add_docker_repo.yml
+      tags: docker_repo
+
+    - name: Install and configure Docker
+      include_tasks: srv/tasks/docker_install.yml
+      tags: docker
+
+# GitLab Runner
+    - name: Install GitLab Runner
+      include_tasks: srv/tasks/install_gitlab_runner.yml
+      tags: gitlab_runner
+
+# GitLab Runner Configuration
+    - name: Configure GitLab Runner
+      include_tasks: srv/tasks/config_gitlab_runner.yml
+      tags: gitlab_runner_config
+
+# Добавляем репозиторий Kubernetes (откуда возьмем kubectl)
+    - name: add kubernetes repo
+      include_tasks: kubernetes/tasks/add_k8s_repo.yml
+      tags: k8s_tools
+
+# Устанавливаем только kubectl
+    - name: Install kubectl
+      include_tasks: srv/tasks/install_kubectl.yml
+      tags: k8s_tools
+
+# Копируем конфиг для доступа к кластеру с master-ноды
+    - name: Copy Kubernetes config to srv
+      include_tasks: srv/tasks/copy_kubeconfig.yml
+      tags: kubeconfig
+
+# Устанавливаем Helm
+    - name: Install Helm CLI
+      include_tasks: srv/tasks/install_helm.yml
+      tags: helm
+
+# Настраиваем Helm (добавляем репозитории)
+    - name: Configure Helm
+      include_tasks: srv/tasks/configure_helm.yml
+      tags: helm_config

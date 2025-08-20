@@ -1,0 +1,21 @@
+---
+- name: Install containerd and cri-tools (after k8s repo added)
+  ansible.builtin.apt:
+    name:
+      - containerd.io
+      - cri-tools
+    state: present
+    update_cache: yes
+  tags: containerd_install
+
+- name: Verify containerd installation
+  ansible.builtin.command: containerd --version
+  register: containerd_version
+  changed_when: false
+  tags: containerd_install
+
+- name: Verify crictl installation
+  ansible.builtin.command: crictl --version
+  register: crictl_version
+  changed_when: false
+  tags: containerd_install

@@ -1,0 +1,25 @@
+---
+- name: Install kubectl only (v1.33.4)
+  ansible.builtin.apt:
+    name: kubectl=1.33.4-1.1
+    state: present
+    update_cache: no
+  tags: k8s_tools
+
+- name: Hold kubectl package to prevent auto-upgrades
+  ansible.builtin.command: apt-mark hold kubectl
+  tags: k8s_tools
+
+- name: Verify kubectl installation and version
+  ansible.builtin.command: kubectl version --client
+  register: kubectl_check
+  changed_when: false
+  failed_when:
+    - kubectl_check.rc != 0
+    - not kubectl_check.stdout is search("1.33.4")
+  tags: k8s_tools
+
+- name: Display installation result
+  ansible.builtin.debug:
+    msg: "kubectl installed successfully: {{ kubectl_check.stdout }}"
+  tags: k8s_tools

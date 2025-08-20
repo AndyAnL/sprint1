@@ -1,0 +1,60 @@
+---
+- name: "[Flannel] Verify manifest exists"
+  ansible.builtin.stat:
+    path: /etc/kube-flannel/kube-flannel.yml
+  register: flannel_manifest
+  tags:
+    - flannel
+    - flannel_configure
+
+- name: "[Flannel] Backup original manifest"
+  ansible.builtin.copy:
+    src: /etc/kube-flannel/kube-flannel.yml
+    dest: /etc/kube-flannel/kube-flannel.yml.bak
+    remote_src: yes
+  when: flannel_manifest.stat.exists
+  tags:
+    - flannel
+    - flannel_configure
+
+- name: "[Flannel] Set Pod CIDR (10.244.0.0/16)"
+  ansible.builtin.replace:
+    path: /etc/kube-flannel/kube-flannel.yml
+    regexp: '"Network": ".*"'
+    replace: '"Network": "10.244.0.0/16"'
+  when: flannel_manifest.stat.exists
+  tags:
+    - flannel
+    - flannel_configure
+
+- name: "[Flannel] Set backend type (vxlan)"
+  ansible.builtin.replace:
+    path: /etc/kube-flannel/kube-flannel.yml
+    regexp: 'Type: ".*"'
+    replace: 'Type: "vxlan"'
+  when: flannel_manifest.stat.exists
+  tags:
+    - flannel
+    - flannel_configure
+
+- name: "[Flannel] Validate modified manifest"
+  ansible.builtin.command: >
+    grep -q '"Network": "10.244.0.0/16"' /etc/kube-flannel/kube-flannel.yml &&
+    grep -q 'Type: "vxlan"' /etc/kube-flannel/kube-flannel.yml
+  register: config_validation
+  changed_when: false
+  failed_when: config_validation.rc != 0
+  tags:
+    - flannel
+    - flannel_configure
+
+- name: "[Flannel] Report configuration status"
+  ansible.builtin.debug:
+    msg: |
+      Flannel configuration:
+      - Pod CIDR: 10.244.0.0/16
+      - Backend: vxlan
+      - Validation: {{ 'SUCCESS' if config_validation.rc == 0 else 'FAILED' }}
+  tags:
+    - flannel
+    - flannel_configure

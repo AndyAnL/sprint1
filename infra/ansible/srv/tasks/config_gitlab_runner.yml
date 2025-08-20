@@ -1,0 +1,47 @@
+---
+- name: Validate GitLab Runner registration variables
+  ansible.builtin.assert:
+    that:
+      - gitlab_runner_registration_token is defined
+      - gitlab_runner_description is defined
+    fail_msg: "Required variables for GitLab Runner registration are missing"
+  tags: gitlab_runner_config
+
+- name: Register GitLab Runner
+  ansible.builtin.shell: |
+    gitlab-runner register \
+      --non-interactive \
+      --url "{{ gitlab_runner_url }}" \
+      --registration-token "{{ gitlab_runner_registration_token }}" \
+      --executor "docker" \
+      --docker-image "{{ gitlab_runner_default_image|default('docker:24.0') }}" \
+      --description "{{ gitlab_runner_description }}" \
+      --tag-list "{{ gitlab_runner_tags|default('docker,k8s') }}" \
+      --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
+      --docker-privileged=true
+  args:
+    executable: /bin/bash
+  register: runner_registration
+  changed_when: "'Runner registered successfully' in runner_registration.stdout"
+  notify: restart gitlab-runner
+  tags: gitlab_runner_config
+
+- name: Verify Runner registration
+  ansible.builtin.command: gitlab-runner verify
+  register: runner_verify
+  changed_when: false
+  failed_when: runner_verify.rc != 0
+  tags: gitlab_runner_config
+
+- name: Show Runner status
+  ansible.builtin.command: gitlab-runner list
+  register: runner_status
+  changed_when: false
+  tags: gitlab_runner_config
+
+- name: Display Runner information
+  ansible.builtin.debug:
+    msg: |
+      Runner registration: {{ 'SUCCESS' if runner_verify.rc == 0 else 'FAILED' }}
+      Runner status: {{ runner_status.stdout }}
+  tags: gitlab_runner_config

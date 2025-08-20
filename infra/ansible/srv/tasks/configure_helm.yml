@@ -1,0 +1,33 @@
+---
+- name: Add standard Helm repositories
+  ansible.builtin.shell: |
+    helm repo add bitnami https://charts.bitnami.com/bitnami
+    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+  environment:
+    # На всякий случай явно прописываем HOME, так как задача выполняется от root
+    HOME: "{{ ansible_env.HOME }}"
+  args:
+    # Выполняем команду только если репозиториев еще нет
+    creates: "{{ ansible_env.HOME }}/.config/helm/repositories.yaml"
+  tags: helm_config
+
+- name: Update Helm repositories cache
+  ansible.builtin.command:
+    cmd: helm repo update
+  environment:
+    HOME: "{{ ansible_env.HOME }}"
+  tags: helm_config
+
+- name: List available repositories
+  ansible.builtin.command:
+    cmd: helm repo list
+  environment:
+    HOME: "{{ ansible_env.HOME }}"
+  register: helm_repo_list
+  changed_when: false
+  tags: helm_config
+
+- name: Display configured repositories
+  ansible.builtin.debug:
+    msg: "{{ helm_repo_list.stdout_lines }}"
+  tags: helm_config

@@ -1,0 +1,41 @@
+---
+- name: "[Flannel] Ensure manifest directory exists"
+  ansible.builtin.file:
+    path: /etc/kube-flannel
+    state: directory
+    mode: 0755
+  tags: 
+    - flannel
+    - flannel_download
+
+- name: "[Flannel] Download Flannel manifest (latest)"
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml"
+    dest: "/etc/kube-flannel/kube-flannel.yml"
+    validate_certs: no
+    timeout: 30
+  register: download_result
+  tags: 
+    - flannel
+    - flannel_download
+
+- name: "[Flannel] Validate downloaded manifest"
+  ansible.builtin.command: >
+    grep -q "kind: DaemonSet" /etc/kube-flannel/kube-flannel.yml &&
+    grep -q "image: docker.io/flannel/flannel" /etc/kube-flannel/kube-flannel.yml
+  register: manifest_validation
+  changed_when: false
+  failed_when: manifest_validation.rc != 0
+  tags: 
+    - flannel
+    - flannel_download
+
+- name: "[Flannel] Report download status"
+  ansible.builtin.debug:
+    msg: |
+      Flannel manifest status:
+      - Location: /etc/kube-flannel/kube-flannel.yml
+      - Valid: {{ 'YES' if manifest_validation.rc == 0 else 'CORRUPTED' }}
+  tags: 
+    - flannel
+    - flannel_download

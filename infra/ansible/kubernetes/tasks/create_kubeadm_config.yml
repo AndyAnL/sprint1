@@ -1,0 +1,26 @@
+---
+- name: Create kubeadm config directory
+  file:
+    path: /etc/kubeadm
+    state: directory
+    mode: 0755
+  tags: k8s_config
+
+- name: Generate kubeadm config
+  template:
+    src: kubernetes/templates/kubeadm-config.yaml.j2
+    dest: /etc/kubeadm/config.yaml
+    mode: 0644
+  tags: k8s_config
+
+- name: Validate kubeadm config
+  command: kubeadm config validate --config /etc/kubeadm/config.yaml
+  register: config_validation
+  ignore_errors: true 
+  tags: k8s_config
+
+- name: Debug config validation
+  debug:
+    var: config_validation
+  when: config_validation is failed
+  tags: k8s_config
